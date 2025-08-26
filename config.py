@@ -15,9 +15,73 @@ SUBREDDITS = [
 
 # Job-related keywords to filter posts
 JOB_KEYWORDS = [
+    # Core job terms
     "developer", "[hiring]", "engineer", "full stack", "backend", 
     "frontend", "software", "programmer", "coding", "remote", 
-    "freelance", "devops", "data scientist", "machine learning"
+    "freelance", "devops", "data scientist", "machine learning",
+    "software engineer", "web developer", "senior developer", "junior developer",
+    "tech lead", "architect", "consultant", "contractor",
+    
+    # Languages (your skillset)
+    "python", "java", "typescript", "javascript", "react", "react.js",
+    "django", "spring boot", "node.js", "nodejs", "fastapi", "next.js",
+    "nextjs", "go", "golang", "sql", "nosql",
+    
+    # Frameworks & Technologies
+    "express", "express.js", "nestjs", "nest.js", "spring", "flask",
+    "vue", "vue.js", "angular", "svelte", "tailwind", "bootstrap",
+    
+    # Infrastructure & DevOps (your skillset)
+    "aws", "azure", "docker", "kubernetes", "k8s", "ci/cd", "jenkins",
+    "microservices", "postgresql", "postgres", "mongodb", "mongo",
+    "redis", "linux", "git", "github", "gitlab", "terraform",
+    "ansible", "helm", "nginx", "apache",
+    
+    # Databases
+    "mysql", "sqlite", "elasticsearch", "dynamodb", "cassandra",
+    "database", "dba", "data engineer", "etl",
+    
+    # AI & ML (your emerging tech)
+    "ai", "artificial intelligence", "machine learning", "ml", "nlp",
+    "langchain", "langgraph", "langsmith", "openai", "gpt", "llm",
+    "langfuse", "vector database", "embeddings", "rag", "chatbot",
+    "ai agent", "agentic", "prompt engineering", "fine tuning",
+    "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy",
+    
+    # Cloud & Services
+    "gcp", "google cloud", "firebase", "vercel", "netlify", "heroku",
+    "digitalocean", "linode", "cloudflare", "serverless", "lambda",
+    "azure functions", "cloud functions", "api gateway", "s3",
+    
+    # Testing & Quality
+    "tdd", "test driven", "pytest", "jest", "cypress", "selenium",
+    "unit test", "integration test", "automation", "qa", "quality assurance",
+    
+    # Authentication & Security
+    "jwt", "oauth", "auth0", "keycloak", "security", "encryption",
+    "ssl", "https", "authentication", "authorization",
+    
+    # Tools & Platforms
+    "celery", "redis", "rabbitmq", "kafka", "elasticsearch", "grafana",
+    "prometheus", "datadog", "sentry", "stripe", "payment", "api",
+    "rest api", "graphql", "grpc", "websocket", "socket.io",
+    
+    # Mobile & Cross-platform
+    "mobile", "ios", "android", "react native", "flutter", "ionic",
+    "xamarin", "cordova", "phonegap", "swift", "kotlin",
+    
+    # Blockchain & Web3 (emerging)
+    "blockchain", "web3", "ethereum", "solidity", "smart contract",
+    "defi", "nft", "crypto", "bitcoin", "polygon", "solana",
+    
+    # Specific roles that might be relevant
+    "technical lead", "team lead", "staff engineer", "principal engineer",
+    "solutions architect", "platform engineer", "site reliability",
+    "sre", "product engineer", "growth engineer", "founding engineer",
+    
+    # Work arrangements
+    "part time", "contract", "consulting", "startup", "agency",
+    "b2b", "saas", "fintech", "edtech", "healthtech", "proptech",
 ]
 
 # Output settings
