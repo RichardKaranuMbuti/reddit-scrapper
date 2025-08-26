@@ -1,0 +1,565 @@
+{% extends "base.html" %}
+
+{% block title %}Job Navigator - Reddit Job Scraper{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">
+                <i class="bi bi-arrow-left-right me-2"></i>Job Navigator
+            </h2>
+            
+            <div class="btn-group" role="group">
+                <a href="/jobs" class="btn btn-outline-primary">
+                    <i class="bi bi-list-ul me-1"></i>List View
+                </a>
+                <a href="/jobs/navigator" class="btn btn-primary">
+                    <i class="bi bi-arrow-left-right me-1"></i>Navigator
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Controls -->
+<div class="card shadow-sm mb-4 job-navigator" id="navigationControls" style="display: none;">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <div class="btn-group w-100" role="group">
+                    <button class="btn btn-outline-primary" id="firstJobBtn" onclick="goToJob('first')">
+                        <i class="bi bi-skip-start-fill"></i>
+                    </button>
+                    <button class="btn btn-outline-primary" id="prevJobBtn" onclick="goToJob('prev')">
+                        <i class="bi bi-caret-left-fill"></i> Prev
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-6 text-center">
+                <div class="job-counter" id="jobCounter">
+                    Job 1 of 0
+                </div>
+                <div class="input-group mt-2" style="max-width: 200px; margin: 0 auto;">
+                    <input type="number" class="form-control form-control-sm text-center" 
+                           id="jumpToInput" min="1" placeholder="Go to job...">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="jumpToJob()">Go</button>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="btn-group w-100" role="group">
+                    <button class="btn btn-outline-primary" id="nextJobBtn" onclick="goToJob('next')">
+                        Next <i class="bi bi-caret-right-fill"></i>
+                    </button>
+                    <button class="btn btn-outline-primary" id="lastJobBtn" onclick="goToJob('last')">
+                        <i class="bi bi-skip-end-fill"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Keyboard shortcuts info -->
+        <div class="mt-3 text-center">
+            <small class="text-muted">
+                <i class="bi bi-keyboard me-1"></i>
+                Use arrow keys: ← Previous | → Next | Home First | End Last
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loadingState" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading jobs...</span>
+    </div>
+    <p class="mt-2 text-muted">Loading job navigator...</p>
+</div>
+
+<!-- No Jobs State -->
+<div id="noJobsState" class="text-center py-5" style="display: none;">
+    <i class="bi bi-inbox fa-3x text-muted mb-3"></i>
+    <h5 class="text-muted">No jobs found</h5>
+    <p class="text-muted">Try adjusting your filters or run the scraper to find new jobs</p>
+    <button class="btn btn-primary" onclick="runScraper()">
+        <i class="bi bi-play-fill me-1"></i>Run Scraper
+    </button>
+</div>
+
+<!-- Job Display Area -->
+<div id="jobDisplay" style="display: none;">
+    <!-- Job Header -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="mb-2" id="jobTitle">
+                        <a href="#" id="jobUrl" target="_blank" class="text-decoration-none">
+                            Job Title
+                        </a>
+                    </h3>
+                    <div id="jobBadges" class="mb-2">
+                        <!-- Badges will be inserted here -->
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group-vertical gap-1">
+                        <button class="btn btn-success" id="openJobBtn" onclick="openCurrentJob()">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Open Job
+                        </button>
+                        <button class="btn btn-warning" id="bookmarkBtn" onclick="bookmarkCurrentJob()">
+                            <i class="bi bi-bookmark me-1"></i>Bookmark
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Details Tabs -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="jobTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" 
+                            data-bs-target="#overview" type="button" role="tab">
+                        <i class="bi bi-info-circle me-1"></i>Overview
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="description-tab" data-bs-toggle="tab" 
+                            data-bs-target="#description" type="button" role="tab">
+                        <i class="bi bi-file-text me-1"></i>Description
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" 
+                            data-bs-target="#analysis" type="button" role="tab">
+                        <i class="bi bi-cpu me-1"></i>AI Analysis
+                    </button>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="card-body">
+            <div class="tab-content" id="jobTabContent">
+                <!-- Overview Tab -->
+                <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-info-circle me-2"></i>Job Information
+                            </h6>
+                            <table class="table table-sm">
+                                <tbody id="jobInfoTable">
+                                    <!-- Job info will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-robot me-2"></i>AI Assessment
+                            </h6>
+                            <table class="table table-sm">
+                                <tbody id="aiInfoTable">
+                                    <!-- AI info will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description Tab -->
+                <div class="tab-pane fade" id="description" role="tabpanel">
+                    <div class="job-detail-section">
+                        <h6><i class="bi bi-file-text me-2"></i>Job Description</h6>
+                        <div class="border rounded p-3 bg-light" style="min-height: 200px;">
+                            <pre id="jobDescription" style="white-space: pre-wrap; font-family: inherit; margin: 0;">
+                                Loading description...
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Tab -->
+                <div class="tab-pane fade" id="analysis" role="tabpanel">
+                    <!-- AI Recommendation -->
+                    <div class="ai-recommendation mb-4">
+                        <h6 class="mb-2">
+                            <i class="bi bi-lightbulb me-2"></i>AI Recommendation
+                        </h6>
+                        <p id="aiRecommendation" class="mb-0">Loading recommendation...</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Key Highlights -->
+                            <div class="job-detail-section">
+                                <h6 class="text-success">
+                                    <i class="bi bi-check-circle me-2"></i>Key Highlights
+                                </h6>
+                                <div id="keyHighlights">
+                                    <p class="text-muted">Loading highlights...</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <!-- Red Flags -->
+                            <div class="job-detail-section">
+                                <h6 class="text-danger">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>Red Flags
+                                </h6>
+                                <div id="redFlags">
+                                    <p class="text-muted">Loading red flags...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let allJobs = [];
+let filteredJobs = [];
+let currentJobIndex = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadJobs();
+    setupKeyboardNavigation();
+    
+    // Listen for filter changes
+    document.addEventListener('filtersChanged', function() {
+        loadJobs();
+    });
+});
+
+async function loadJobs() {
+    try {
+        showElement('loadingState');
+        hideElement('navigationControls');
+        hideElement('jobDisplay');
+        hideElement('noJobsState');
+        
+        // Get filter parameters
+        const filters = getCurrentFilters();
+        const queryParams = new URLSearchParams(filters);
+        
+        const response = await fetch(`/api/jobs?${queryParams}`);
+        if (!response.ok) throw new Error('Failed to fetch jobs');
+        
+        allJobs = await response.json();
+        filteredJobs = [...allJobs];
+        
+        if (filteredJobs.length === 0) {
+            hideElement('loadingState');
+            showElement('noJobsState');
+            return;
+        }
+        
+        currentJobIndex = 0;
+        displayCurrentJob();
+        updateNavigationControls();
+        
+        hideElement('loadingState');
+        showElement('navigationControls');
+        showElement('jobDisplay');
+        
+    } catch (error) {
+        console.error('Error loading jobs:', error);
+        hideElement('loadingState');
+        showError('Failed to load jobs. Please try again.');
+    }
+}
+
+function displayCurrentJob() {
+    if (filteredJobs.length === 0) return;
+    
+    const job = filteredJobs[currentJobIndex];
+    
+    // Update job title and URL
+    document.getElementById('jobTitle').innerHTML = `
+        <a href="${job.url}" id="jobUrl" target="_blank" class="text-decoration-none">
+            ${job.title}
+        </a>
+    `;
+    
+    // Update badges
+    updateJobBadges(job);
+    
+    // Update job information table
+    updateJobInfoTable(job);
+    
+    // Update AI information table
+    updateAiInfoTable(job);
+    
+    // Update description
+    document.getElementById('jobDescription').textContent = job.description || 'No description available';
+    
+    // Update AI recommendation
+    document.getElementById('aiRecommendation').textContent = job.recommendation || 'No recommendation available';
+    
+    // Update highlights and red flags
+    updateHighlightsAndFlags(job);
+    
+    // Update bookmark button state
+    updateBookmarkButton(job);
+}
+
+function updateJobBadges(job) {
+    const badgesContainer = document.getElementById('jobBadges');
+    
+    let badges = [];
+    
+    // Worth checking badge
+    if (job.worth_checking) {
+        badges.push(`<span class="badge bg-success me-2">
+            <i class="bi bi-check-circle me-1"></i>Worth Checking
+        </span>`);
+    } else {
+        badges.push(`<span class="badge bg-secondary me-2">
+            <i class="bi bi-x-circle me-1"></i>Not Recommended
+        </span>`);
+    }
+    
+    // Confidence score
+    const confidenceClass = job.confidence_score >= 80 ? 'success' : 
+                           job.confidence_score >= 60 ? 'warning' : 'danger';
+    badges.push(`<span class="badge bg-${confidenceClass} me-2">
+        <i class="bi bi-percent me-1"></i>${Math.round(job.confidence_score)}% confidence
+    </span>`);
+    
+    // Subreddit
+    badges.push(`<span class="badge bg-secondary me-2">
+        <i class="bi bi-reddit me-1"></i>${job.subreddit}
+    </span>`);
+    
+    // Remote friendly
+    if (job.remote_friendly) {
+        badges.push(`<span class="badge bg-info me-2">
+            <i class="bi bi-house me-1"></i>Remote
+        </span>`);
+    }
+    
+    // Compensation mentioned
+    if (job.compensation_mentioned) {
+        badges.push(`<span class="badge bg-success me-2">
+            <i class="bi bi-cash me-1"></i>Compensation
+        </span>`);
+    }
+    
+    badgesContainer.innerHTML = badges.join('');
+}
+
+function updateJobInfoTable(job) {
+    const tableBody = document.getElementById('jobInfoTable');
+    
+    const rows = [
+        { label: 'Posted', value: job.time_posted || 'Unknown' },
+        { label: 'Job Type', value: job.job_type ? job.job_type.replace('_', ' ').toUpperCase() : 'Unspecified' },
+        { label: 'Experience', value: job.experience_level ? job.experience_level.charAt(0).toUpperCase() + job.experience_level.slice(1) : 'Unspecified' },
+        { label: 'Remote Work', value: job.remote_friendly ? 'Yes' : 'No' },
+        { label: 'Compensation', value: job.compensation_mentioned ? 'Mentioned' : 'Not mentioned' },
+        { label: 'Scraped', value: job.scraped_at ? new Date(job.scraped_at).toLocaleDateString() : 'Unknown' }
+    ];
+    
+    tableBody.innerHTML = rows.map(row => `
+        <tr>
+            <td class="fw-bold">${row.label}:</td>
+            <td>${row.value}</td>
+        </tr>
+    `).join('');
+}
+
+function updateAiInfoTable(job) {
+    const tableBody = document.getElementById('aiInfoTable');
+    
+    const rows = [
+        { label: 'Worth Checking', value: job.worth_checking ? 'Yes' : 'No' },
+        { label: 'Confidence', value: `${Math.round(job.confidence_score)}%` },
+        { label: 'Analyzed', value: job.analyzed_at ? new Date(job.analyzed_at).toLocaleDateString() : 'Not analyzed' },
+        { label: 'Red Flags', value: job.red_flags ? job.red_flags.length.toString() : '0' },
+        { label: 'Highlights', value: job.key_highlights ? job.key_highlights.length.toString() : '0' }
+    ];
+    
+    tableBody.innerHTML = rows.map(row => `
+        <tr>
+            <td class="fw-bold">${row.label}:</td>
+            <td>${row.value}</td>
+        </tr>
+    `).join('');
+}
+
+function updateHighlightsAndFlags(job) {
+    // Update highlights
+    const highlightsContainer = document.getElementById('keyHighlights');
+    if (job.key_highlights && job.key_highlights.length > 0) {
+        highlightsContainer.innerHTML = job.key_highlights.map(highlight => `
+            <div class="highlight-item">
+                <i class="bi bi-check-circle text-success me-2"></i>${highlight}
+            </div>
+        `).join('');
+    } else {
+        highlightsContainer.innerHTML = '<p class="text-muted">No highlights identified</p>';
+    }
+    
+    // Update red flags
+    const redFlagsContainer = document.getElementById('redFlags');
+    if (job.red_flags && job.red_flags.length > 0) {
+        redFlagsContainer.innerHTML = job.red_flags.map(flag => `
+            <div class="red-flag-item">
+                <i class="bi bi-exclamation-triangle text-danger me-2"></i>${flag.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            </div>
+        `).join('');
+    } else {
+        redFlagsContainer.innerHTML = '<p class="text-muted">No red flags identified</p>';
+    }
+}
+
+function updateBookmarkButton(job) {
+    const bookmarkBtn = document.getElementById('bookmarkBtn');
+    const isBookmarked = bookmarks.some(b => b.url === job.url);
+    
+    if (isBookmarked) {
+        bookmarkBtn.innerHTML = '<i class="bi bi-bookmark-fill me-1"></i>Bookmarked';
+        bookmarkBtn.className = 'btn btn-success';
+    } else {
+        bookmarkBtn.innerHTML = '<i class="bi bi-bookmark me-1"></i>Bookmark';
+        bookmarkBtn.className = 'btn btn-warning';
+    }
+}
+
+function updateNavigationControls() {
+    if (filteredJobs.length === 0) return;
+    
+    const counter = document.getElementById('jobCounter');
+    const jumpInput = document.getElementById('jumpToInput');
+    
+    counter.textContent = `Job ${currentJobIndex + 1} of ${filteredJobs.length}`;
+    
+    jumpInput.max = filteredJobs.length;
+    jumpInput.value = '';
+    jumpInput.placeholder = `1-${filteredJobs.length}`;
+    
+    // Update button states
+    document.getElementById('firstJobBtn').disabled = currentJobIndex === 0;
+    document.getElementById('prevJobBtn').disabled = currentJobIndex === 0;
+    document.getElementById('nextJobBtn').disabled = currentJobIndex === filteredJobs.length - 1;
+    document.getElementById('lastJobBtn').disabled = currentJobIndex === filteredJobs.length - 1;
+}
+
+function goToJob(direction) {
+    switch (direction) {
+        case 'first':
+            currentJobIndex = 0;
+            break;
+        case 'prev':
+            if (currentJobIndex > 0) currentJobIndex--;
+            break;
+        case 'next':
+            if (currentJobIndex < filteredJobs.length - 1) currentJobIndex++;
+            break;
+        case 'last':
+            currentJobIndex = filteredJobs.length - 1;
+            break;
+    }
+    
+    displayCurrentJob();
+    updateNavigationControls();
+}
+
+function jumpToJob() {
+    const input = document.getElementById('jumpToInput');
+    const jobNumber = parseInt(input.value);
+    
+    if (jobNumber >= 1 && jobNumber <= filteredJobs.length) {
+        currentJobIndex = jobNumber - 1;
+        displayCurrentJob();
+        updateNavigationControls();
+        input.value = '';
+    } else {
+        showToast('Please enter a valid job number', 'warning');
+    }
+}
+
+function openCurrentJob() {
+    if (filteredJobs.length > 0) {
+        window.open(filteredJobs[currentJobIndex].url, '_blank');
+    }
+}
+
+function bookmarkCurrentJob() {
+    if (filteredJobs.length > 0) {
+        const job = filteredJobs[currentJobIndex];
+        bookmarkJob(job.url, job.title);
+        updateBookmarkButton(job);
+    }
+}
+
+function setupKeyboardNavigation() {
+    document.addEventListener('keydown', function(event) {
+        // Don't interfere if user is typing in an input
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        
+        switch (event.key) {
+            case 'ArrowLeft':
+                event.preventDefault();
+                goToJob('prev');
+                break;
+            case 'ArrowRight':
+                event.preventDefault();
+                goToJob('next');
+                break;
+            case 'Home':
+                event.preventDefault();
+                goToJob('first');
+                break;
+            case 'End':
+                event.preventDefault();
+                goToJob('last');
+                break;
+            case ' ': // Space
+                event.preventDefault();
+                openCurrentJob();
+                break;
+            case 'b':
+            case 'B':
+                event.preventDefault();
+                bookmarkCurrentJob();
+                break;
+        }
+    });
+}
+
+function getCurrentFilters() {
+    return {
+        hours_back: document.getElementById('timeRange')?.value || 24,
+        worth_checking_only: document.getElementById('jobQuality')?.value === 'worth_checking',
+        min_confidence: document.getElementById('minConfidence')?.value || 0,
+        remote_only: document.getElementById('remoteOnly')?.checked || false,
+        compensation_mentioned_only: document.getElementById('compensationOnly')?.checked || false,
+        experience_level: document.getElementById('experienceLevel')?.value || '',
+        job_type: document.getElementById('jobType')?.value || '',
+        search_terms: document.getElementById('searchTerms')?.value || '',
+        limit: 1000 // Get all jobs for navigation
+    };
+}
+
+function showElement(id) {
+    document.getElementById(id).style.display = 'block';
+}
+
+function hideElement(id) {
+    document.getElementById(id).style.display = 'none';
+}
+</script>
+{% endblock %}

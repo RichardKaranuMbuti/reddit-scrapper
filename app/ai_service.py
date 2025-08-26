@@ -9,8 +9,8 @@ import random
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from schemas import JobPostingAnalysis
-from prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
+from app.models import JobPostingAnalysis
+from app.prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 from config import OPENAI_MODEL, MAX_RETRIES, RETRY_DELAY
 
 logger = logging.getLogger(__name__)

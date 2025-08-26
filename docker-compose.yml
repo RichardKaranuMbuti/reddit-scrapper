@@ -1,0 +1,62 @@
+# docker-compose.yml
+
+services:
+  reddit-scraper:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      # Mount data directory for persistence
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # Mount config for easy updates
+      - ./config.py:/app/config.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reddit-scraper-net
+
+  # Optional: Add a scheduled scraper service
+  reddit-scraper-cron:
+    build: .
+    command: ["python", "scripts/run_scraper.py", "--schedule"]
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config.py:/app/config.py
+    restart: unless-stopped
+    depends_on:
+      - reddit-scraper
+    networks:
+      - reddit-scraper-net
+
+  # Optional: Add nginx for production
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - reddit-scraper
+    restart: unless-stopped
+    networks:
+      - reddit-scraper-net
+    profiles:
+      - production
+
+networks:
+  reddit-scraper-net:
+    driver: bridge
+
+volumes:
+  reddit-data:
+    driver: local

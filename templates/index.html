@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Reddit Job Scraper{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="mb-3">
+            <i class="bi bi-speedometer2 me-2"></i>Dashboard Overview
+        </h2>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4" id="statsCards">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-primary text-white shadow-sm">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Total Jobs</div>
+                        <div class="h5 mb-0">{{ stats.total_jobs if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-briefcase-fill fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-success text-white shadow-sm">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Analyzed</div>
+                        <div class="h5 mb-0">{{ stats.analyzed_jobs if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-cpu-fill fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-white shadow-sm">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Worth Checking</div>
+                        <div class="h5 mb-0">{{ stats.worth_checking if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-star-fill fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white shadow-sm">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1">Last 24h</div>
+                        <div class="h5 mb-0">{{ stats.jobs_last_24h if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-clock-fill fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">
+                    <i class="bi bi-graph-up me-2"></i>Job Analysis Overview
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="jobsChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">
+                    <i class="bi bi-pie-chart me-2"></i>Quality Distribution
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="qualityChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Jobs Preview -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="bi bi-list-ul me-2"></i>Recent Worth Checking Jobs
+                </h6>
+                <a href="/jobs?worth_checking_only=true" class="btn btn-sm btn-outline-primary">
+                    View All <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="recentJobsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Job Title</th>
+                                <th>Subreddit</th>
+                                <th>Confidence</th>
+                                <th>Posted</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <i class="bi bi-hourglass-split me-2"></i>Loading recent jobs...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Cards -->
+<div class="row">
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card shadow-sm border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-play-circle-fill text-primary fa-3x mb-3"></i>
+                <h6 class="card-title">Run Scraper</h6>
+                <p class="card-text small text-muted">Start a new scraping session to find latest jobs</p>
+                <button class="btn btn-primary btn-sm" onclick="runScraper()">
+                    <i class="bi bi-play-fill me-1"></i>Start Scraping
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card shadow-sm border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-list-task text-success fa-3x mb-3"></i>
+                <h6 class="card-title">Browse Jobs</h6>
+                <p class="card-text small text-muted">View and filter all analyzed job postings</p>
+                <a href="/jobs" class="btn btn-success btn-sm">
+                    <i class="bi bi-list-ul me-1"></i>View Jobs
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card shadow-sm border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-arrow-left-right text-warning fa-3x mb-3"></i>
+                <h6 class="card-title">Job Navigator</h6>
+                <p class="card-text small text-muted">Navigate through jobs one by one with detailed view</p>
+                <a href="/jobs/navigator" class="btn btn-warning btn-sm">
+                    <i class="bi bi-compass me-1"></i>Navigate
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card shadow-sm border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-download text-info fa-3x mb-3"></i>
+                <h6 class="card-title">Export Data</h6>
+                <p class="card-text small text-muted">Download job data in CSV or JSON format</p>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-info btn-sm" onclick="exportJobs('csv')">
+                        CSV
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="exportJobs('json')">
+                        JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scraper Status Modal -->
+<div class="modal fade" id="scraperModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Scraper Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="scraperModalBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize dashboard
+    initDashboard();
+    
+    // Load recent jobs
+    loadRecentJobs();
+    
+    // Update scraper status
+    updateScraperStatus();
+    
+    // Set up auto-refresh
+    setInterval(updateScraperStatus, 30000); // Every 30 seconds
+});
+
+async function initDashboard() {
+    try {
+        // Load stats
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+        
+        // Update charts
+        initJobsChart(stats);
+        initQualityChart(stats);
+        
+    } catch (error) {
+        console.error('Error initializing dashboard:', error);
+        showToast('Error loading dashboard data', 'error');
+    }
+}
+
+function initJobsChart(stats) {
+    const ctx = document.getElementById('jobsChart').getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Analyzed', 'Pending Analysis', 'Failed Analysis'],
+            datasets: [{
+                data: [
+                    stats.analyzed_jobs,
+                    Math.max(0, stats.total_jobs - stats.analyzed_jobs - stats.failed_analysis),
+                    stats.failed_analysis
+                ],
+                backgroundColor: [
+                    '#28a745',
+                    '#ffc107', 
+                    '#dc3545'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function initQualityChart(stats) {
+    const ctx = document.getElementById('qualityChart').getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['Worth Checking', 'Not Worth Checking'],
+            datasets: [{
+                data: [
+                    stats.worth_checking,
+                    Math.max(0, stats.analyzed_jobs - stats.worth_checking)
+                ],
+                backgroundColor: [
+                    '#007bff',
+                    '#6c757d'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+async function loadRecentJobs() {
+    try {
+        const response = await fetch('/api/jobs?worth_checking_only=true&limit=10');
+        const jobs = await response.json();
+        
+        const tbody = document.querySelector('#recentJobsTable tbody');
+        
+        if (jobs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox me-2"></i>No recent jobs found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = jobs.map(job => `
+            <tr>
+                <td>
+                    <a href="${job.url}" target="_blank" class="text-decoration-none">
+                        ${job.title.length > 50 ? job.title.substring(0, 50) + '...' : job.title}
+                    </a>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${job.subreddit}</span>
+                </td>
+                <td>
+                    <span class="badge ${job.confidence_score >= 80 ? 'bg-success' : job.confidence_score >= 60 ? 'bg-warning' : 'bg-danger'}">
+                        ${Math.round(job.confidence_score)}%
+                    </span>
+                </td>
+                <td>
+                    <small class="text-muted">${job.time_posted}</small>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="bookmarkJob('${job.url}', '${job.title.replace(/'/g, "\\'")}')">
+                        <i class="bi bi-bookmark"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading recent jobs:', error);
+        const tbody = document.querySelector('#recentJobsTable tbody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Error loading jobs
+                </td>
+            </tr>
+        `;
+    }
+}
+</script>
+{% endblock %}

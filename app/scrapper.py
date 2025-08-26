@@ -23,9 +23,10 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 # Import our modules
-from schemas import JobPosting, AnalyzedJobPosting, JobPostingAnalysis
-from database import JobDatabase
-from ai_service import AIAnalysisService
+from app.models import JobPosting, AnalyzedJobPosting, JobPostingAnalysis
+from app.database import JobDatabase
+from app.ai_service import AIAnalysisService
+from app.utils import parse_reddit_time, format_time_ago
 from config import *
 
 logging.basicConfig(level=logging.INFO)

@@ -1,7 +1,7 @@
-# schemas.py
-"""Pydantic schemas for data validation"""
+# app/models.py
+"""Pydantic models for data validation and API responses"""
 from pydantic import BaseModel, Field, HttpUrl, validator
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -80,3 +80,58 @@ class AnalyzedJobPosting(JobPosting):
     last_analysis_attempt: Optional[datetime] = None
     analysis_failed: bool = Field(default=False)
     failure_reason: Optional[str] = None
+
+
+# API Response Models
+class JobResponse(BaseModel):
+    """API response model for job data"""
+    id: int
+    title: str
+    description: str
+    time_posted: str
+    url: str
+    subreddit: str
+    scraped_at: datetime
+    worth_checking: Optional[bool] = None
+    confidence_score: Optional[float] = None
+    job_type: Optional[str] = None
+    compensation_mentioned: Optional[bool] = None
+    remote_friendly: Optional[bool] = None
+    experience_level: Optional[str] = None
+    red_flags: Optional[List[str]] = None
+    key_highlights: Optional[List[str]] = None
+    recommendation: Optional[str] = None
+    analyzed_at: Optional[datetime] = None
+
+
+class JobFilters(BaseModel):
+    """Model for job filtering parameters"""
+    hours_back: int = Field(default=24, ge=1, le=8760)  # 1 hour to 1 year
+    worth_checking_only: bool = Field(default=False)
+    min_confidence: float = Field(default=0, ge=0, le=100)
+    remote_only: bool = Field(default=False)
+    compensation_mentioned_only: bool = Field(default=False)
+    experience_level: Optional[ExperienceLevel] = None
+    job_type: Optional[JobType] = None
+    search_terms: Optional[str] = None
+    limit: Optional[int] = Field(default=50, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+class StatsResponse(BaseModel):
+    """API response model for statistics"""
+    total_jobs: int
+    analyzed_jobs: int
+    worth_checking: int
+    jobs_last_24h: int
+    failed_analysis: int
+    analysis_rate: float
+    worth_checking_rate: float
+
+
+class ScraperStatus(BaseModel):
+    """Model for scraper status"""
+    is_running: bool
+    last_run: Optional[datetime] = None
+    jobs_scraped_last_run: Optional[int] = None
+    next_scheduled_run: Optional[datetime] = None

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import aiosqlite
-from schemas import JobPosting, AnalyzedJobPosting, JobPostingAnalysis
+from app.models import JobPosting, AnalyzedJobPosting, JobPostingAnalysis
 from config import DATABASE_FILE, JOB_RETENTION_DAYS
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ class JobDatabase:
                     title TEXT NOT NULL,
                     description TEXT,
                     time_posted TEXT,
+                    time_posted_parsed TIMESTAMP,  -- Add parsed timestamp
                     subreddit TEXT NOT NULL,
                     scraped_at TIMESTAMP NOT NULL,
                     analysis_attempts INTEGER DEFAULT 0,
@@ -77,15 +78,20 @@ class JobDatabase:
             return result is not None
     
     async def insert_job_posting(self, job: JobPosting) -> int:
-        """Insert a new job posting, return job_id"""
+        """Insert a new job posting with parsed time, return job_id"""
+        from app.utils import parse_reddit_time
+        
+        # Parse the time_posted string
+        parsed_time = parse_reddit_time(job.time_posted)
+        
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute('''
                 INSERT INTO job_postings 
-                (url, title, description, time_posted, subreddit, scraped_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (url, title, description, time_posted, time_posted_parsed, subreddit, scraped_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 str(job.url), job.title, job.description, 
-                job.time_posted, job.subreddit, job.scraped_at
+                job.time_posted, parsed_time, job.subreddit, job.scraped_at
             ))
             await db.commit()
             return cursor.lastrowid
@@ -164,12 +170,12 @@ class JobDatabase:
             return [dict(row) for row in rows]
     
     async def get_analyzed_jobs(self, hours_back: int = 24, worth_checking_only: bool = False) -> List[Dict[str, Any]]:
-        """Get analyzed job postings within time frame"""
+        """Get analyzed job postings within time frame, sorted by recency"""
         time_threshold = datetime.now() - timedelta(hours=hours_back)
         
         query = '''
             SELECT jp.id, jp.url, jp.title, jp.description, jp.time_posted, 
-                   jp.subreddit, jp.scraped_at,
+                   jp.time_posted_parsed, jp.subreddit, jp.scraped_at,
                    ja.worth_checking, ja.confidence_score, ja.job_type,
                    ja.compensation_mentioned, ja.remote_friendly, ja.experience_level,
                    ja.red_flags, ja.key_highlights, ja.recommendation, ja.analyzed_at
@@ -183,14 +189,21 @@ class JobDatabase:
         if worth_checking_only:
             query += ' AND ja.worth_checking = TRUE'
         
-        query += ' ORDER BY ja.analyzed_at DESC'
+        # Sort by parsed time if available, otherwise by scraped time
+        query += '''
+            ORDER BY 
+                CASE 
+                    WHEN jp.time_posted_parsed IS NOT NULL THEN jp.time_posted_parsed 
+                    ELSE jp.scraped_at 
+                END DESC
+        '''
         
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
             
-            # Parse JSON fields
+            # Parse JSON fields and add time priority
             results = []
             for row in rows:
                 row_dict = dict(row)
@@ -203,8 +216,17 @@ class JobDatabase:
                     row_dict['key_highlights'] = json.loads(row_dict['key_highlights'])
                 else:
                     row_dict['key_highlights'] = []
+                
+                # Add time priority for sorting
+                from app.utils import calculate_time_priority, format_time_ago
+                row_dict['time_priority'] = calculate_time_priority(row_dict.get('time_posted', ''))
+                row_dict['formatted_time'] = format_time_ago(row_dict.get('time_posted', ''))
                     
                 results.append(row_dict)
+            
+            # Sort by time priority (most recent first)
+            from app.utils import sort_jobs_by_recency
+            results = sort_jobs_by_recency(results, 'time_posted')
             
             return results
     

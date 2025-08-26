@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Reddit Job Scraper Dashboard{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <!-- Custom CSS -->
+    <link href="/static/css/custom.css" rel="stylesheet">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="bi bi-briefcase-fill me-2"></i>
+                Reddit Job Scraper
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="bi bi-house-fill me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/jobs">
+                            <i class="bi bi-list-ul me-1"></i>Job List
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/jobs/navigator">
+                            <i class="bi bi-arrow-left-right me-1"></i>Navigator
+                        </a>
+                    </li>
+                </ul>
+                
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear-fill me-1"></i>Actions
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="runScraper()">
+                                <i class="bi bi-play-fill me-2"></i>Run Scraper
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportJobs('csv')">
+                                <i class="bi bi-file-earmark-excel me-2"></i>Export CSV
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportJobs('json')">
+                                <i class="bi bi-file-earmark-code me-2"></i>Export JSON
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="cleanupOldJobs()">
+                                <i class="bi bi-trash me-2"></i>Cleanup Old Jobs
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <span class="navbar-text" id="scraper-status">
+                            <i class="bi bi-circle-fill text-secondary me-1"></i>
+                            <small>Idle</small>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-lg-3 col-md-4 mb-4">
+                {% block sidebar %}
+                <div class="card shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Filters</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Time Range Filter -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-clock me-1"></i>Time Range
+                            </label>
+                            <select class="form-select" id="timeRange" onchange="applyFilters()">
+                                <option value="3">Last 3 hours</option>
+                                <option value="5">Last 5 hours</option>
+                                <option value="24" selected>Last 24 hours</option>
+                                <option value="72">Last 3 days</option>
+                                <option value="168">Last week</option>
+                            </select>
+                        </div>
+
+                        <!-- Job Quality Filter -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-star me-1"></i>Job Quality
+                            </label>
+                            <select class="form-select" id="jobQuality" onchange="applyFilters()">
+                                <option value="all">All Jobs</option>
+                                <option value="worth_checking" selected>Worth Checking Only</option>
+                                <option value="not_worth_checking">Not Worth Checking</option>
+                            </select>
+                        </div>
+
+                        <!-- Confidence Score -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-percent me-1"></i>Min Confidence: <span id="confidenceValue">50</span>%
+                            </label>
+                            <input type="range" class="form-range" id="minConfidence" 
+                                   min="0" max="100" value="50" step="5" 
+                                   oninput="updateConfidenceValue()" onchange="applyFilters()">
+                        </div>
+
+                        <!-- Quick Filters -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Quick Filters</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="remoteOnly" onchange="applyFilters()">
+                                <label class="form-check-label" for="remoteOnly">
+                                    <i class="bi bi-house me-1"></i>Remote Only
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="compensationOnly" onchange="applyFilters()">
+                                <label class="form-check-label" for="compensationOnly">
+                                    <i class="bi bi-cash me-1"></i>Compensation Mentioned
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Experience Level -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-graph-up me-1"></i>Experience Level
+                            </label>
+                            <select class="form-select" id="experienceLevel" onchange="applyFilters()">
+                                <option value="">All Levels</option>
+                                <option value="entry">Entry</option>
+                                <option value="mid">Mid</option>
+                                <option value="senior">Senior</option>
+                                <option value="lead">Lead</option>
+                            </select>
+                        </div>
+
+                        <!-- Job Type -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-briefcase me-1"></i>Job Type
+                            </label>
+                            <select class="form-select" id="jobType" onchange="applyFilters()">
+                                <option value="">All Types</option>
+                                <option value="full_time">Full Time</option>
+                                <option value="part_time">Part Time</option>
+                                <option value="contract">Contract</option>
+                                <option value="freelance">Freelance</option>
+                                <option value="internship">Internship</option>
+                            </select>
+                        </div>
+
+                        <!-- Search Presets -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-search me-1"></i>Quick Search
+                            </label>
+                            <select class="form-select" id="searchPreset" onchange="applySearchPreset()">
+                                <option value="">Select Preset...</option>
+                                <option value="python django fastapi flask">🐍 Python Jobs</option>
+                                <option value="react typescript javascript frontend">⚛️ React/Frontend</option>
+                                <option value="aws azure docker kubernetes devops">☁️ Cloud/DevOps</option>
+                                <option value="ai machine learning nlp langchain openai">🤖 AI/ML Jobs</option>
+                                <option value="full stack node.js next.js">📱 Full Stack</option>
+                                <option value="senior lead principal architect">💰 High Paying</option>
+                            </select>
+                        </div>
+
+                        <!-- Search Terms -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Search Terms</label>
+                            <input type="text" class="form-control" id="searchTerms" 
+                                   placeholder="e.g. python remote senior" 
+                                   onkeyup="debounceSearch()" onchange="applyFilters()">
+                            <small class="text-muted">Space-separated keywords</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Results Stats -->
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Current Results</h6>
+                    </div>
+                    <div class="card-body" id="currentStats">
+                        <div class="d-flex justify-content-between">
+                            <small>Loading...</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bookmarks -->
+                <div class="card shadow-sm mt-3" id="bookmarksCard" style="display: none;">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0"><i class="bi bi-bookmark-fill me-2"></i>Bookmarks</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">You have <span id="bookmarkCount">0</span> bookmarked jobs</p>
+                        <button class="btn btn-sm btn-outline-primary w-100 mb-2" onclick="showBookmarks()">
+                            <i class="bi bi-eye me-1"></i>View Bookmarks
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger w-100" onclick="clearBookmarks()">
+                            <i class="bi bi-trash me-1"></i>Clear All
+                        </button>
+                    </div>
+                </div>
+                {% endblock %}
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="col-lg-9 col-md-8">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
+    <!-- Loading Spinner -->
+    <div class="position-fixed top-50 start-50 translate-middle" id="loadingSpinner" style="display: none; z-index: 9999;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
