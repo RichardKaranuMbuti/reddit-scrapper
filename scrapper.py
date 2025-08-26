@@ -1,4 +1,4 @@
-import requests
+# scrapper.py
 import pandas as pd
 import time
 import logging
@@ -19,8 +19,14 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import schedule
-from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from pydantic import ValidationError
+
+# Import our modules
+from schemas import JobPosting, AnalyzedJobPosting, JobPostingAnalysis
+from database import JobDatabase
+from ai_service import AIAnalysisService
+from config import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,21 +34,27 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+
 class RedditJobScraper:
     """Reddit job scraper for extracting developer/engineer job posts with OpenAI analysis"""
     
-    def __init__(self, output_file: str = "reddit_jobs.csv", analyzed_file: str = "analyzed_jobs.csv", log_level: str = "INFO"):
+    def __init__(self, output_file: str = OUTPUT_FILE, log_level: str = LOG_LEVEL):
         self.output_file = output_file
-        self.analyzed_file = analyzed_file
-        self.job_keywords = ["developer", "[hiring]", "engineer", "full stack", "backend", "frontend", "software"]
+        self.logger = logging.getLogger("RedditJobScraper")
+        self.job_keywords = JOB_KEYWORDS
         self.setup_logging(log_level)
         self.driver = None
         
+        # Initialize database
+        self.db = JobDatabase()
+        
         # OpenAI setup
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        if not os.getenv("OPENAI_API_KEY"):
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
             self.logger.warning("OPENAI_API_KEY not found. Analysis will be skipped.")
-            self.openai_client = None
+            self.ai_service = None
+        else:
+            self.ai_service = AIAnalysisService(openai_api_key, OPENAI_MODEL)
         
     def setup_logging(self, log_level: str):
         """Setup logging configuration"""
@@ -51,97 +63,11 @@ class RedditJobScraper:
             level=getattr(logging, log_level.upper()),
             format=log_format,
             handlers=[
-                logging.FileHandler("reddit_scraper.log"),
+                logging.FileHandler(LOG_FILE),
                 logging.StreamHandler()
             ]
         )
             
-    async def analyze_job_posting(self, job_data: Dict) -> Optional[Dict]:
-        """Analyze a job posting using OpenAI to determine if it's worth checking"""
-        if not self.openai_client:
-            return None
-            
-        system_prompt = """
-        You are analyzing Reddit job postings for a developer/engineer looking for legitimate job opportunities.
-        
-        Analyze the posting and determine if it's worth the user's time to check based on:
-        1. Is the poster actually hiring (not just asking for advice or discussing jobs)?
-        2. Is it a legitimate job opportunity (not spam, not selling courses, not MLM)?
-        3. Does it offer reasonable compensation or mention paid work?
-        4. Is it for developer/engineer/programming roles?
-        5. Does it provide enough detail to be taken seriously?
-        
-        Return your analysis as JSON with this exact schema:
-        {
-            "worth_checking": boolean,
-            "confidence_score": number (0-100),
-            "job_type": string,
-            "compensation_mentioned": boolean,
-            "remote_friendly": boolean,
-            "experience_level": string,
-            "red_flags": array of strings,
-            "key_highlights": array of strings,
-            "recommendation": string
-        }
-        """
-        
-        user_prompt = f"""
-        REDDIT JOB POSTING ANALYSIS
-        
-        Title: {job_data.get('title', 'N/A')}
-        Subreddit: {job_data.get('subreddit', 'N/A')}
-        Time Posted: {job_data.get('time_posted', 'N/A')}
-        
-        Description:
-        {job_data.get('description', 'No description available')}
-        
-        Please analyze this posting and return your assessment in the required JSON format.
-        """
-        
-        try:
-            self.logger.debug(f"Analyzing job posting: {job_data.get('title', 'Unknown')[:50]}...")
-            
-            completion = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using mini for cost efficiency
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=500
-            )
-            
-            response_content = completion.choices[0].message.content.strip()
-            
-            # Try to extract JSON from response
-            try:
-                # Find JSON in the response
-                json_start = response_content.find('{')
-                json_end = response_content.rfind('}') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = response_content[json_start:json_end]
-                    analysis = json.loads(json_str)
-                    
-                    # Add metadata
-                    analysis['analyzed_at'] = datetime.now().isoformat()
-                    analysis['model_used'] = 'gpt-4o-mini'
-                    
-                    self.logger.debug(f"Analysis complete: Worth checking = {analysis.get('worth_checking', False)}")
-                    return analysis
-                else:
-                    self.logger.warning("No valid JSON found in OpenAI response")
-                    return None
-                    
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse OpenAI response as JSON: {e}")
-                self.logger.debug(f"Raw response: {response_content}")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"Error analyzing job posting with OpenAI: {e}")
-            return None
-        
     def setup_driver(self) -> webdriver.Chrome:
         """Setup Chrome WebDriver with optimized options"""
         chrome_options = Options()
@@ -222,6 +148,10 @@ class RedditJobScraper:
             permalink = post_element.get_attribute("permalink")
             full_url = f"https://www.reddit.com{permalink}" if permalink else ""
             
+            # Skip if no URL (can't use as unique identifier)
+            if not full_url:
+                return None
+            
             # Extract description from text body
             description = ""
             try:
@@ -254,7 +184,7 @@ class RedditJobScraper:
                 "time_posted": time_posted,
                 "url": full_url,
                 "subreddit": subreddit,
-                "scraped_at": datetime.now().isoformat()
+                "scraped_at": datetime.now()
             }
             
         except Exception as e:
@@ -270,11 +200,11 @@ class RedditJobScraper:
             self.driver.get(url)
             
             # Wait for page to load and posts to appear
-            wait = WebDriverWait(self.driver, 15)
+            wait = WebDriverWait(self.driver, PAGE_LOAD_TIMEOUT)
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "shreddit-post")))
             
             # Additional wait to ensure content is fully loaded
-            time.sleep(3)
+            time.sleep(ADDITIONAL_LOAD_WAIT)
             
             # Find all post elements
             posts = self.driver.find_elements(By.TAG_NAME, "shreddit-post")
@@ -315,7 +245,7 @@ class RedditJobScraper:
                     all_job_posts.extend(posts)
                     
                     # Small delay between subreddit requests
-                    time.sleep(2)
+                    time.sleep(DELAY_BETWEEN_SUBREDDITS)
                     
                 except Exception as e:
                     self.logger.error(f"Failed to scrape {subreddit}: {e}")
@@ -329,64 +259,124 @@ class RedditJobScraper:
         self.logger.info(f"Total job posts extracted: {len(all_job_posts)}")
         return all_job_posts
         
+    async def process_job_postings(self, job_data_list: List[Dict]) -> List[Dict]:
+        """Process scraped job postings: validate, save to DB, and analyze with AI"""
+        if not job_data_list:
+            self.logger.warning("No job data to process")
+            return []
+        
+        self.logger.info(f"Processing {len(job_data_list)} job postings...")
+        processed_jobs = []
+        new_jobs = []
+        
+        # Initialize database
+        await self.db.init_database()
+        
+        # Filter out existing jobs and validate new ones
+        for job_data in job_data_list:
+            try:
+                # Validate job posting data
+                job = JobPosting(**job_data)
+                
+                # Check if job already exists in database
+                if await self.db.job_exists(str(job.url)):
+                    self.logger.debug(f"Job already exists: {job.url}")
+                    continue
+                
+                # Insert new job into database
+                job_id = await self.db.insert_job_posting(job)
+                job_dict = job.dict()
+                job_dict['id'] = job_id
+                
+                new_jobs.append(job_dict)
+                processed_jobs.append(job_dict)
+                
+            except ValidationError as e:
+                self.logger.warning(f"Invalid job data: {e}")
+                continue
+            except Exception as e:
+                self.logger.error(f"Error processing job: {e}")
+                continue
+        
+        self.logger.info(f"Found {len(new_jobs)} new job postings to analyze")
+        
+        # Analyze new jobs with AI in batches
+        if new_jobs and self.ai_service:
+            await self._analyze_jobs_in_batches(new_jobs)
+        elif not self.ai_service:
+            self.logger.warning("AI service not available - skipping analysis")
+        
+        return processed_jobs
+    
+    async def _analyze_jobs_in_batches(self, jobs: List[Dict]):
+        """Analyze jobs in batches using AI service"""
+        total_jobs = len(jobs)
+        successful_analyses = 0
+        failed_analyses = 0
+        
+        # Process jobs in batches
+        for i in range(0, total_jobs, BATCH_SIZE):
+            batch = jobs[i:i + BATCH_SIZE]
+            batch_num = i // BATCH_SIZE + 1
+            total_batches = (total_jobs + BATCH_SIZE - 1) // BATCH_SIZE
+            
+            self.logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} jobs)")
+            
+            # Analyze batch
+            results = await self.ai_service.analyze_job_batch(batch)
+            
+            # Save results to database
+            for job_data, success, analysis, error in results:
+                job_id = job_data['id']
+                
+                if success and analysis:
+                    try:
+                        await self.db.insert_job_analysis(job_id, analysis, OPENAI_MODEL)
+                        await self.db.update_analysis_attempt(job_id, failed=False)
+                        successful_analyses += 1
+                        self.logger.debug(f"Analysis saved for job {job_id}")
+                    except Exception as e:
+                        self.logger.error(f"Error saving analysis for job {job_id}: {e}")
+                        await self.db.update_analysis_attempt(job_id, failed=True, reason=str(e))
+                        failed_analyses += 1
+                else:
+                    await self.db.update_analysis_attempt(job_id, failed=True, reason=error)
+                    failed_analyses += 1
+                    self.logger.warning(f"Analysis failed for job {job_id}: {error}")
+            
+            # Small delay between batches to avoid overwhelming the API
+            if i + BATCH_SIZE < total_jobs:
+                await asyncio.sleep(2)
+        
+        self.logger.info(f"Analysis complete: {successful_analyses} successful, {failed_analyses} failed")
+        
+    async def retry_failed_analyses(self):
+        """Retry jobs that previously failed analysis"""
+        failed_jobs = await self.db.get_failed_jobs_for_retry(MAX_RETRIES)
+        
+        if not failed_jobs:
+            self.logger.info("No failed jobs to retry")
+            return
+        
+        self.logger.info(f"Retrying analysis for {len(failed_jobs)} jobs")
+        
+        if self.ai_service:
+            await self._analyze_jobs_in_batches(failed_jobs)
+        
     def save_to_csv(self, job_data: List[Dict]):
-        """Save job data to CSV file"""
+        """Save job data to CSV file (legacy support)"""
         if not job_data:
-            self.logger.warning("No job data to save")
+            self.logger.warning("No job data to save to CSV")
             return
             
         try:
-            # Prepare data for CSV (flatten AI analysis)
-            csv_data = []
-            analyzed_data = []
-            
-            for post in job_data:
-                # Original post data for main CSV
-                csv_row = {
-                    'title': post.get('title', ''),
-                    'description': post.get('description', ''),
-                    'time_posted': post.get('time_posted', ''),
-                    'url': post.get('url', ''),
-                    'subreddit': post.get('subreddit', ''),
-                    'scraped_at': post.get('scraped_at', '')
-                }
-                csv_data.append(csv_row)
-                
-                # Analyzed data for analyzed CSV (only if analysis exists)
-                if 'ai_analysis' in post:
-                    analysis = post['ai_analysis']
-                    analyzed_row = {
-                        **csv_row,  # Include all original data
-                        'worth_checking': analysis.get('worth_checking', False),
-                        'confidence_score': analysis.get('confidence_score', 0),
-                        'job_type': analysis.get('job_type', ''),
-                        'compensation_mentioned': analysis.get('compensation_mentioned', False),
-                        'remote_friendly': analysis.get('remote_friendly', False),
-                        'experience_level': analysis.get('experience_level', ''),
-                        'red_flags': '; '.join(analysis.get('red_flags', [])),
-                        'key_highlights': '; '.join(analysis.get('key_highlights', [])),
-                        'recommendation': analysis.get('recommendation', ''),
-                        'analyzed_at': analysis.get('analyzed_at', ''),
-                        'model_used': analysis.get('model_used', '')
-                    }
-                    analyzed_data.append(analyzed_row)
-            
-            # Save main CSV (all posts)
-            df = pd.DataFrame(csv_data)
+            # Convert to DataFrame and save
+            df = pd.DataFrame(job_data)
             file_exists = os.path.exists(self.output_file)
             mode = 'a' if file_exists else 'w'
             header = not file_exists
             df.to_csv(self.output_file, mode=mode, header=header, index=False, encoding='utf-8')
-            self.logger.info(f"Saved {len(csv_data)} job posts to {self.output_file}")
-            
-            # Save analyzed CSV (only analyzed posts)
-            if analyzed_data:
-                df_analyzed = pd.DataFrame(analyzed_data)
-                file_exists_analyzed = os.path.exists(self.analyzed_file)
-                mode_analyzed = 'a' if file_exists_analyzed else 'w'
-                header_analyzed = not file_exists_analyzed
-                df_analyzed.to_csv(self.analyzed_file, mode=mode_analyzed, header=header_analyzed, index=False, encoding='utf-8')
-                self.logger.info(f"Saved {len(analyzed_data)} analyzed posts to {self.analyzed_file}")
+            self.logger.info(f"Saved {len(job_data)} job posts to {self.output_file}")
             
         except Exception as e:
             self.logger.error(f"Error saving to CSV: {e}")
@@ -397,36 +387,47 @@ class RedditJobScraper:
         self.logger.info(f"Starting Reddit job scrape at {start_time}")
         
         try:
-            # Scrape all subreddits
-            job_posts = self.scrape_multiple_subreddits(subreddits)
+            # Test AI service connection
+            if self.ai_service:
+                ai_connected = await self.ai_service.test_connection()
+                if not ai_connected:
+                    self.logger.warning("AI service connection failed - continuing without analysis")
+                    self.ai_service = None
             
-            if job_posts:
-                # Process with OpenAI analysis
-                analyzed_posts = await self.process_job_postings(job_posts)
+            # Scrape all subreddits
+            raw_job_posts = self.scrape_multiple_subreddits(subreddits)
+            
+            if raw_job_posts:
+                # Process and analyze jobs
+                processed_jobs = await self.process_job_postings(raw_job_posts)
                 
-                # Save to CSV files
-                self.save_to_csv(analyzed_posts)
+                # Also retry any previously failed analyses
+                await self.retry_failed_analyses()
+                
+                # Save to CSV for backward compatibility
+                self.save_to_csv([job for job in raw_job_posts])
             
             end_time = datetime.now()
             duration = end_time - start_time
             
-            self.logger.info(f"Scrape completed in {duration}. Found {len(job_posts)} job posts")
+            self.logger.info(f"Scrape completed in {duration}. Processed {len(raw_job_posts)} job posts")
             
-            return job_posts
+            return raw_job_posts
             
         except Exception as e:
             self.logger.error(f"Scrape failed: {e}")
             return []
 
-from config import SUBREDDITS
+
 async def main():
     """Main function to run the scraper with OpenAI analysis"""
     # Configuration
     subreddits = SUBREDDITS 
+    
     # Initialize scraper
     scraper = RedditJobScraper(
-        output_file="reddit_jobs.csv",
-        analyzed_file="analyzed_jobs.csv"
+        output_file=OUTPUT_FILE,
+        log_level=LOG_LEVEL
     )
     
     # Run scraping with analysis
@@ -449,7 +450,7 @@ def start_scheduler():
         asyncio.run(scheduled_scrape())
     
     # Schedule the scraper to run every hour
-    schedule.every().hour.do(run_scheduled_scrape)
+    schedule.every(SCRAPE_INTERVAL_HOURS).hours.do(run_scheduled_scrape)
     
     # Run initial scrape
     run_scheduled_scrape()

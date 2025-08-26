@@ -1,140 +1,232 @@
-# Reddit Job Scraper
+# Reddit Job Scraper with AI Analysis
 
-A Python-based web scraper that extracts developer/engineering job posts from specified Reddit subreddits and saves them to a CSV file.
+An intelligent job scraper that extracts developer/engineer job postings from Reddit, analyzes them with OpenAI for quality assessment, and provides a beautiful Streamlit dashboard for filtering and viewing results.
 
-## Features
+## 🚀 Features
 
-- Scrapes multiple subreddits for job-related posts
-- Filters posts based on job keywords (developer, engineer, hiring, etc.)
-- Extracts title, description, posting time, and URL
-- Saves data to CSV with timestamps
-- Comprehensive logging
-- Hourly scheduling capability
-- Modular and maintainable code structure
+- **Smart Web Scraping**: Scrapes multiple programming-related subreddits
+- **AI-Powered Analysis**: Uses OpenAI GPT-4o-mini to assess job quality
+- **Duplicate Detection**: Uses URL-based deduplication to avoid processing the same job twice
+- **Batch Processing**: Processes jobs in configurable batches for efficient API usage
+- **SQLite Database**: Stores all data with proper indexing for fast queries
+- **Real-time Dashboard**: Beautiful Streamlit UI for filtering and viewing jobs
+- **Scheduled Execution**: Can run automatically every hour
+- **Robust Error Handling**: Exponential backoff for API failures and graceful degradation
 
-## Setup
+## 📋 Requirements
 
-### Prerequisites
+- Python 3.8+
+- Chrome browser (for Selenium)
+- OpenAI API key
 
-- Python 3.7+
-- Chrome browser installed
-- ChromeDriver (will be installed automatically with selenium)
+## 🛠️ Installation
 
-### Installation
+1. **Clone or download the files** and navigate to the directory:
 
-1. Create and activate a virtual environment:
 ```bash
-python -m venv reddit_scraper_env
-source reddit_scraper_env/bin/activate  # On Windows: reddit_scraper_env\Scripts\activate
+cd reddit-job-scraper
 ```
 
-2. Install dependencies:
+2. **Install required packages**:
+
 ```bash
-pip install requests beautifulsoup4 selenium pandas schedule python-dotenv lxml
+pip install -r requirements.txt
 ```
 
-3. Save the scraper code as `reddit_scraper.py`
+3. **Create a `.env` file** with your OpenAI API key:
 
-## Usage
-
-### One-time Scrape
 ```bash
-python reddit_scraper.py
+echo "OPENAI_API_KEY=your_openai_api_key_here" > .env
 ```
 
-### Scheduled Hourly Scraping
+4. **Configure settings** in `config.py`:
+   - Add/remove subreddits to scrape
+   - Adjust batch size for AI processing
+   - Modify time filters and other settings
+
+## 🎯 Usage
+
+### Quick Start
+
+1. **Run the scraper once**:
 ```bash
-python reddit_scraper.py --schedule
+python run_scraper.py
 ```
 
-### Customizing Subreddits
-
-Edit the `subreddits` list in the `main()` function:
-
-```python
-subreddits = [
-    "WebDeveloperJobs",
-    "AppDevelopers", 
-    "forhire",
-    # Add more subreddits here
-]
+2. **Start the dashboard**:
+```bash
+python run_dashboard.py
 ```
 
-### Customizing Job Keywords
+3. **Open your browser** to `http://localhost:8501` to view the dashboard
 
-Modify the `job_keywords` list in the `RedditJobScraper` class:
+### Advanced Usage
 
-```python
-self.job_keywords = ["developer", "[hiring]", "engineer", "full stack", "backend"]
+**Schedule automatic scraping** (runs every hour):
+```bash
+python run_scraper.py --schedule
 ```
 
-## Output
-
-The scraper creates two files:
-
-1. **reddit_jobs.csv** - Contains scraped job data with columns:
-   - title
-   - description  
-   - time_posted
-   - url
-   - subreddit
-   - scraped_at
-
-2. **reddit_scraper.log** - Contains detailed logging information
-
-## Configuration Options
-
-You can customize the scraper by modifying these parameters in the `RedditJobScraper` class:
-
-- `output_file`: CSV output filename
-- `job_keywords`: Keywords to filter job posts
-- `log_level`: Logging verbosity (DEBUG, INFO, WARNING, ERROR)
-
-## Troubleshooting
-
-### Common Issues
-
-1. **ChromeDriver not found**: The scraper uses selenium-manager to automatically download ChromeDriver, but if you encounter issues, manually download ChromeDriver and add it to your PATH.
-
-2. **Timeout errors**: Reddit pages may load slowly. Increase the timeout in the `scrape_subreddit` method:
-   ```python
-   wait = WebDriverWait(self.driver, 30)  # Increase from 15 to 30 seconds
-   ```
-
-3. **No posts found**: Some subreddits may have different HTML structures. Check the logs for details and consider updating the CSS selectors.
-
-4. **Rate limiting**: If you encounter rate limiting, increase the delay between requests:
-   ```python
-   time.sleep(5)  # Increase from 2 to 5 seconds
-   ```
-
-### Debugging
-
-Enable debug logging to see detailed information:
-
-```python
-scraper = RedditJobScraper(log_level="DEBUG")
+**Clean up old job postings**:
+```bash
+python cleanup_old_jobs.py --days 14
 ```
 
-## Legal and Ethical Considerations
-
-- This scraper is for educational and personal use
-- Respect Reddit's robots.txt and terms of service
-- Use reasonable delays between requests
-- Don't overload Reddit's servers
-- Consider using Reddit's official API for production use
-
-## Scheduling
-
-The scraper includes built-in scheduling functionality. When run with `--schedule`, it will:
-
-1. Run an initial scrape immediately
-2. Schedule subsequent scrapes every hour
-3. Continue running until manually stopped (Ctrl+C)
-
-## Output Example
-
-```csv
-title,description,time_posted,url,subreddit,scraped_at
-"Looking for an app developer, for long term projects","I run a bootstrapped software studio, where we build apps for clients and inhouse apps as well. I'm looking for a builder...","10 days ago","https://www.reddit.com/r/AppDevelopers/comments/1m9n7nc/looking_for_an_app_developer_for_long_term/","r/AppDevelopers","2025-08-05T10:30:00.123456"
+**View database statistics**:
+```bash
+python cleanup_old_jobs.py --stats-only
 ```
+
+## 📊 Dashboard Features
+
+The Streamlit dashboard provides:
+
+### Filters
+- **Time Range**: Last 3 hours, 5 hours, 24 hours, 3 days, or week
+- **Job Quality**: All jobs, worth checking only, or not worth checking
+- **Confidence Score**: Minimum AI confidence threshold
+- **Remote Work**: Filter for remote-friendly positions
+- **Compensation**: Filter for jobs mentioning salary
+- **Experience Level**: Entry, mid, senior, lead, or unspecified
+- **Job Type**: Full-time, part-time, contract, freelance, internship
+
+### Views
+- **Analytics Tab**: Charts and distributions of job data
+- **Job List Tab**: Searchable, sortable list of job postings with AI analysis
+- **Trends Tab**: Historical trends over time
+
+### Export Options
+- Download filtered results as CSV or JSON
+- Real-time data refresh
+
+## 🤖 AI Analysis
+
+Each job posting is analyzed for:
+
+- **Worth Checking**: Boolean recommendation
+- **Confidence Score**: 0-100% confidence in the assessment
+- **Job Type**: Full-time, contract, freelance, etc.
+- **Compensation**: Whether salary/payment is mentioned
+- **Remote Friendly**: Supports remote work
+- **Experience Level**: Required experience level
+- **Red Flags**: Issues like vague descriptions, possible scams
+- **Key Highlights**: Positive aspects of the posting
+- **Recommendation**: Brief AI recommendation
+
+## 📁 File Structure
+
+```
+├── config.py              # Configuration settings
+├── schemas.py             # Pydantic data models
+├── prompts.py             # AI prompts for analysis
+├── database.py            # SQLite database operations
+├── ai_service.py          # OpenAI analysis service
+├── scrapper.py            # Main scraper (updated)
+├── streamlit_app.py       # Dashboard UI
+├── cleanup_old_jobs.py    # Database cleanup script
+├── run_scraper.py         # Scraper runner script
+├── run_dashboard.py       # Dashboard runner script
+├── requirements.txt       # Python dependencies
+└── .env                   # Environment variables (create this)
+```
+
+## ⚙️ Configuration Options
+
+### Key Settings in `config.py`:
+
+- `SUBREDDITS`: List of subreddits to scrape
+- `BATCH_SIZE`: Number of jobs to analyze simultaneously (default: 20)
+- `OPENAI_MODEL`: AI model to use (default: "gpt-4o-mini" for cost efficiency)
+- `MAX_RETRIES`: Number of retry attempts for failed analyses
+- `JOB_RETENTION_DAYS`: How long to keep jobs in database (default: 14 days)
+
+### Environment Variables:
+
+- `OPENAI_API_KEY`: Your OpenAI API key (required)
+
+## 🔧 Troubleshooting
+
+### Common Issues:
+
+1. **Chrome WebDriver Issues**:
+   - Install Chrome browser
+   - The script will auto-download ChromeDriver via webdriver-manager
+   - If issues persist, try Firefox as fallback
+
+2. **OpenAI API Errors**:
+   - Verify your API key is correct
+   - Check you have sufficient API credits
+   - The script uses exponential backoff for rate limits
+
+3. **Database Errors**:
+   - Ensure write permissions in the directory
+   - Database will be created automatically on first run
+
+4. **Memory Issues with Large Batches**:
+   - Reduce `BATCH_SIZE` in config.py
+   - Consider increasing system memory
+
+### Logs:
+
+Check `reddit_scraper.log` for detailed error information.
+
+## 💰 Cost Optimization
+
+The scraper is optimized for cost efficiency:
+
+- Uses GPT-4o-mini (cheapest OpenAI model suitable for this task)
+- Batch processing reduces API overhead
+- Duplicate detection prevents reprocessing
+- Configurable retry limits prevent excessive API calls
+
+Estimated cost: ~$0.01-0.05 per 100 job analyses.
+
+## 🔄 Automation
+
+For continuous operation:
+
+1. **Use the built-in scheduler**:
+```bash
+python run_scraper.py --schedule
+```
+
+2. **Or set up a system cron job** (Linux/Mac):
+```bash
+# Run every hour
+0 * * * * /path/to/python /path/to/run_scraper.py
+
+# Clean up old jobs daily
+0 2 * * * /path/to/python /path/to/cleanup_old_jobs.py
+```
+
+3. **Or use Windows Task Scheduler** for Windows systems.
+
+## 📈 Performance Tips
+
+- **Database Performance**: Indexes are created automatically for fast queries
+- **Scraping Performance**: Adjust delays in config.py if getting blocked
+- **API Performance**: Monitor OpenAI usage and adjust batch size if needed
+- **UI Performance**: Dashboard caches data for 1-5 minutes to reduce database load
+
+## 🤝 Contributing
+
+Feel free to:
+- Add more subreddits to the configuration
+- Improve the AI prompts for better analysis
+- Enhance the dashboard with additional features
+- Add new filtering options
+- Optimize the scraping logic
+
+## 📄 License
+
+This project is for educational and personal use. Respect Reddit's terms of service and rate limiting. Use responsibly.
+
+## 🆘 Support
+
+If you encounter issues:
+1. Check the logs in `reddit_scraper.log`
+2. Verify your `.env` file has the correct OpenAI API key
+3. Ensure Chrome browser is installed
+4. Check that all dependencies are installed correctly
+
+For advanced usage or customization, refer to the inline code documentation.
